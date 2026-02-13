@@ -1,8 +1,5 @@
-**/build/
-.west/
-bin/
+build/
 *.o
-*.elf
-*.bin
 *.d
-*.ninja
+*.bin
+*.elf

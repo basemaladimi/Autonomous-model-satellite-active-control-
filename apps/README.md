@@ -1,1 +1,0 @@
-Put custom applications (e.g. blink) in this directory.
