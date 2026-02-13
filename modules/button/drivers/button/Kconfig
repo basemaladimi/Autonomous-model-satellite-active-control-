@@ -1,0 +1,7 @@
+# Create a new option in menuconfig
+config CUSTOM_BUTTON
+    bool "Custom button"
+    default n       # Set the driver to be disabled by default
+    depends on GPIO # Make it dependent on GPIO driver
+    help
+        Enable the custom button driver.

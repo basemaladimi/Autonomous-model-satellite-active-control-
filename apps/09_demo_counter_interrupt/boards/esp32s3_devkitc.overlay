@@ -1,0 +1,10 @@
+/ {
+    aliases {
+        my-timer = &timer0;
+    };
+};
+
+&timer0 {
+    status = "okay";
+    prescaler = <4000>;
+};

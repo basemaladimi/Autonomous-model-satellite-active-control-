@@ -1,0 +1,24 @@
+/ {
+    aliases {
+        led0 = &external_led;
+    };
+
+    leds {
+        compatible = "gpio-leds";
+        external_led: led_18 {
+            gpios = <&gpio0 18 GPIO_ACTIVE_HIGH>;
+        };
+    };
+};
+
+&i2c0 {
+    status = "okay";
+    clock-frequency = <400000>;
+
+    my_mpu: mpu6050@68 {
+        compatible = "invensense,mpu6050";
+        reg = <0x68>;
+        int-gpios = <&gpio0 19 GPIO_ACTIVE_HIGH>;
+    };
+
+};

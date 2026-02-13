@@ -1,0 +1,62 @@
+// Define PWM_POLARITY_NORMAL
+#include <zephyr/dt-bindings/pwm/pwm.h>
+
+/ {
+	aliases {
+		my-adc = &adc0;
+		my-adc-channel = &adc0_ch0;
+		led-0 = &led_0;
+	};
+
+	// User-defined node for configuring "pwm-leds" subnodes
+	// <{LED controller node}, channel, period, flags>
+	my-pwm-leds {
+		compatible = "pwm-leds";
+		led_0: pwm_led_0 {
+			    pwms = <&ledc0 0 1000 PWM_POLARITY_NORMAL>;
+		};
+	};
+};
+
+// ADC1 (adc0) channel 0 is connected to GPIO1
+&adc0 {
+	status = "okay";
+    #address-cells = <1>;
+	#size-cells = <0>;
+    
+	adc0_ch0: channel@0 {
+		reg = <0>;
+		zephyr,gain = "ADC_GAIN_1_4";
+		zephyr,reference = "ADC_REF_INTERNAL";
+		zephyr,vref-mv = <3900>;
+		zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
+		zephyr,resolution = <12>;
+	};
+};
+
+// Modify ledc0 node (defined in esp32s3_common.dtsi) to connect LED PWM
+// controller to pinmux group
+&ledc0 {
+    pinctrl-0 = <&ledctrl_0>;
+	pinctrl-names = "default";
+    status = "okay";
+	#address-cells = <1>;
+	#size-cells = <0>;
+	
+	// Configure channel 0
+	channel0@0 {
+	    reg = <0x0>;
+		timer = <0>;
+	};
+};
+ 
+// Modify pinctrl node (defined in esp32s3_common.dtsi) to assign GPIO13 to
+// the LED controller channel 0
+&pinctrl {
+        ledctrl_0: led-0 {
+	        group1 {
+		        pinmux = <LEDC_CH0_GPIO13>;
+			output-enable;
+		};
+	};
+};
