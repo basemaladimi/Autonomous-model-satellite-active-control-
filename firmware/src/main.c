@@ -12,6 +12,7 @@ float b_accel[3] = {0.145774f, -0.047434f, -0.799729f};
 float pitch = 0.0f;
 float roll = 0.0f;
 float rad_to_deg = 57.29577951f;
+float ConfiVal = 0.05f;
  
 void trigger_handler(const struct device *dev, const struct sensor_trigger *trig) {
     struct sensor_value accel[3];
@@ -28,10 +29,10 @@ void trigger_handler(const struct device *dev, const struct sensor_trigger *trig
     for (int i = 0; i < 3; i++) {
         cal_a[i] = A_inv[i][0] * shifted_a[0] + A_inv[i][1] * shifted_a[1] + A_inv[i][2] * shifted_a[2];
     }
-    roll = atan2f(cal_a[0], cal_a[2])*rad_to_deg;
-    pitch = atan2f(cal_a[1], cal_a[2])*rad_to_deg;
+    roll = ConfiVal*atan2f(cal_a[0], cal_a[2])*rad_to_deg+(1.0f-ConfiVal)*roll;
+    pitch = ConfiVal*atan2f(cal_a[1], cal_a[2])*rad_to_deg+(1.0f-ConfiVal)*pitch;
 
-    printk("%f,%f,%f,%f,%f\n", 
+    printk("ax:%f,ay:%f,az:%f,roll:%f,pitch:%f\n", 
             (double)(cal_a[0]), 
             (double)(cal_a[1]), 
             (double)(cal_a[2]),
