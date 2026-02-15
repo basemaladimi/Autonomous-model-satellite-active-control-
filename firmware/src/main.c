@@ -17,9 +17,10 @@ int64_t last_time = 0;
 float dt = 0.0f;
 float rollg = 0.0f, pitchg = 0.0f, yawg = 0.0f;
 float rollc = 0.0f, pitchc = 0.0f;
-float cnfdne_wght_rol = 0.073f;
-float cnfdne_wght_pitch = 0.066f;
+float cnfdne_wght_rol = 0.009f;
+float cnfdne_wght_pitch = 0.01f;
 float level_offsets[2] = {0.0f, 0.0f};
+float gx_cal = 0.0f, gy_cal = 0.0f, gz_cal = 0.0f;
 
 void trigger_handler(const struct device *dev, const struct sensor_trigger *trig) {
     int64_t current_time = k_ticks_to_us_near64(k_uptime_ticks());
@@ -50,15 +51,15 @@ void trigger_handler(const struct device *dev, const struct sensor_trigger *trig
     }
 
 
-    rollg = rollg + (-raw_g[1])* dt;
-    pitchg = pitchg + raw_g[0] * dt;
+    rollg = rollg + (-(raw_g[1] - gy_cal))* dt;
+    pitchg = pitchg + (raw_g[0] - gx_cal)* dt;
     yawg = yawg + raw_g[2] * dt;
 
     rolla = atan2f((cal_a[0] - level_offsets[0]), cal_a[2])*rad_to_deg;
     pitcha = atan2f((cal_a[1] - level_offsets[1]), cal_a[2])*rad_to_deg;
 
-    rollc = rolla * cnfdne_wght_rol + (1.0f - cnfdne_wght_rol) * (rollc + (-raw_g[1])* dt);
-    pitchc = pitcha * cnfdne_wght_pitch + (1.0f - cnfdne_wght_pitch) * (pitchc + raw_g[0] * dt);
+    rollc = (rolla * cnfdne_wght_rol + (1.0f - cnfdne_wght_rol) * (rollc + (-(raw_g[1] - gy_cal))* dt));
+    pitchc = (pitcha * cnfdne_wght_pitch + (1.0f - cnfdne_wght_pitch) * (pitchc + (raw_g[0] - gx_cal)* dt));
 
     printk("rolla:%f, pitcha:%f, rollc:%f, pitchc:%f\n",
             (double)(rolla), 
@@ -69,8 +70,8 @@ void trigger_handler(const struct device *dev, const struct sensor_trigger *trig
 
 int main(void) {
     const struct device *dev = DEVICE_DT_GET(DT_NODELABEL(my_mpu));
-    struct sensor_value a_tmp[3];
-    float a_sum[3] = {0.0f, 0.0f, 0.0f};
+    struct sensor_value a_tmp[3], g_tmp[3];
+    float a_sum[3] = {0.0f, 0.0f, 0.0f}, g_sum[3] = {0.0f, 0.0f, 0.0f};
     int s = 200;
 
     k_msleep(500);
@@ -78,12 +79,17 @@ int main(void) {
     for (int i = 0; i < s; i++) {
         sensor_sample_fetch(dev);
         sensor_channel_get(dev, SENSOR_CHAN_ACCEL_XYZ, a_tmp);
+        sensor_channel_get(dev, SENSOR_CHAN_GYRO_XYZ, g_tmp);
         a_sum[0] += (float)sensor_value_to_double(&a_tmp[0]);
         a_sum[1] += (float)sensor_value_to_double(&a_tmp[1]);
         a_sum[2] += (float)sensor_value_to_double(&a_tmp[2]);
-        k_msleep(5);
+        g_sum[0] += (float)sensor_value_to_double(&g_tmp[0]);
+        g_sum[1] += (float)sensor_value_to_double(&g_tmp[1]);
+        g_sum[2] += (float)sensor_value_to_double(&g_tmp[2]);
+        k_msleep(3);
     }
     float ax = (a_sum[0] / s) - b_accel[0], ay = (a_sum[1] / s) - b_accel[1], az = (a_sum[2] / s) - b_accel[2];
+    gx_cal = (g_sum[0] / s) * rad_to_deg, gy_cal = (g_sum[1] / s) * rad_to_deg, gz_cal = (g_sum[2] / s) * rad_to_deg;
     level_offsets[0] = A_inv[0][0] * ax + A_inv[0][1] * ay + A_inv[0][2] * az;
     level_offsets[1] = A_inv[1][0] * ax + A_inv[1][1] * ay + A_inv[1][2] * az;
     struct sensor_trigger trig = {.type = SENSOR_TRIG_DATA_READY, .chan = SENSOR_CHAN_ALL};
