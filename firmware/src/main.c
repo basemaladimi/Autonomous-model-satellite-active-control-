@@ -4,6 +4,8 @@
 #include <math.h>
 #include <time.h>
 #include <zephyr/drivers/i2c.h>
+#define N 5
+#define BARO_LOOP_MS 20
 
 
 float A_inv[3][3] = {
@@ -23,6 +25,9 @@ float cnfdne_wght_rol = 0.004f;
 float cnfdne_wght_pitch = 0.004f;
 float level_offsets[2] = {0.0f, 0.0f};
 float gx_cal = 0.0f, gy_cal = 0.0f, gz_cal = 0.0f;
+static float baro_ring[N];
+static int baro_idx = 0;
+static bool baro_full = false;
 
 void trigger_handler(const struct device *dev, const struct sensor_trigger *trig) {
     int64_t current_time = k_ticks_to_us_near64(k_uptime_ticks());
@@ -67,18 +72,53 @@ void trigger_handler(const struct device *dev, const struct sensor_trigger *trig
     //     (double)(rollc),
     //     (double)(pitchc));
 
-}   
+}
+
+// Median filter to reduce sudent spikes in barometer readings
+static float median5_from_ring(const float ring[N], bool full, int idx)
+{
+    float w[N];
+    int count = full ? N : idx;
+    if (count <= 0) {
+        return 0.0f;
+    }
+    for (int i = 0; i < count; i++) {
+        w[i] = ring[i];
+    }
+    for (int i = 0; i < count - 1; i++) {
+        for (int j = 0; j < count - 1 - i; j++) {
+            if (w[j] > w[j + 1]) {
+                float tmp = w[j];
+                w[j] = w[j + 1];
+                w[j + 1] = tmp;
+            }
+        }
+    }
+    return w[count / 2];
+}
+static float median5_sliding_update(float p_new)
+{
+    baro_ring[baro_idx] = p_new;
+    baro_idx = (baro_idx + 1) % N;
+
+    if (baro_idx == 0) {
+        baro_full = true;
+    }
+
+    return median5_from_ring(baro_ring, baro_full, baro_idx);
+}
 
 int main(void) {
     const struct device *dev = DEVICE_DT_GET(DT_NODELABEL(my_mpu));
     const struct device *dev_baro = DEVICE_DT_GET(DT_NODELABEL(my_ms));
     struct sensor_value a_tmp[3], g_tmp[3];
     float a_sum[3] = {0.0f, 0.0f, 0.0f}, g_sum[3] = {0.0f, 0.0f, 0.0f};
-    float a_baro = 0.0f;
-    float a_baro1 = 0.0f;
+    float p_ref = 0.0f;
     int s = 200;
     struct sensor_value pressure, temperature;
-    float AltitudeBarometer;
+    float AltitudeBarometer, AltitudeBarometer1;
+    float R = 287.05; // Specific gas constant for dry air in J/(kg*K)
+    float g = 9.80665; // Standard gravity in m/s^2
 
     k_msleep(500);
 
@@ -123,13 +163,6 @@ int main(void) {
         }
         k_msleep(3);
     }
-    
-    for (int i = 0; i < 5; i++) {
-        sensor_sample_fetch(dev_baro);
-        sensor_channel_get(dev_baro, SENSOR_CHAN_PRESS, &pressure);
-        a_baro += (float)sensor_value_to_double(&pressure);
-        k_msleep(10);
-    }
 
     float ax = (a_sum[0] / s) - b_accel[0], ay = (a_sum[1] / s) - b_accel[1], az = (a_sum[2] / s) - b_accel[2];
     gx_cal = (g_sum[0] / s) * rad_to_deg, gy_cal = (g_sum[1] / s) * rad_to_deg, gz_cal = (g_sum[2] / s) * rad_to_deg;
@@ -137,16 +170,40 @@ int main(void) {
     level_offsets[1] = A_inv[1][0] * ax + A_inv[1][1] * ay + A_inv[1][2] * az;
     struct sensor_trigger trig = {.type = SENSOR_TRIG_DATA_READY, .chan = SENSOR_CHAN_ALL};
     sensor_trigger_set(dev, &trig, trigger_handler);
-    a_baro = a_baro/5.0f;
-
+    
+    // Compputing initial reference pressure for altitude calculation by taking median of N samples to reduce effect of spiks
+    float samples[N];
+    for (int i = 0; i < N; i++) {
+        sensor_sample_fetch(dev_baro);
+        sensor_channel_get(dev_baro, SENSOR_CHAN_PRESS, &pressure);
+        samples[i] = (float)sensor_value_to_double(&pressure);
+        k_msleep(10);
+    }
+    for (int i = 0; i < N - 1; i++) {
+        for (int j = i + 1; j < N; j++) {
+            if (samples[j] < samples[i]) {
+                float tmp = samples[i];
+                samples[i] = samples[j];
+                samples[j] = tmp;
+            }
+        }
+    }
+    p_ref = samples[N / 2];
 
     while (1) {
         sensor_sample_fetch(dev_baro);
         sensor_channel_get(dev_baro, SENSOR_CHAN_PRESS, &pressure);
         sensor_channel_get(dev_baro, SENSOR_CHAN_AMBIENT_TEMP, &temperature);
-        a_baro1 = (float)sensor_value_to_double(&pressure);
-        AltitudeBarometer = 44330.0f * (1.0f - powf(a_baro1 / a_baro, 0.1903f));
-        printk("alt:%f\n", (double)AltitudeBarometer);
-        k_msleep(100);
+        float p_raw = (float)sensor_value_to_double(&pressure);
+        float t = (float)sensor_value_to_double(&temperature);
+
+        float p_med = median5_sliding_update(p_raw);
+
+        float t_k = t + 273.15f; // Convert to Kelvin
+        float a = (R * t_k) / g; // Scale height
+        AltitudeBarometer1 = a * logf(p_ref / p_med);                                // Altitude calculation using barometric formula
+        AltitudeBarometer = 44330.0f * (1.0f - powf(p_med / p_ref, 0.1903f));       // Alttude calculation using simplified barometric formula
+        printk("alt1:%f, alt2:%f\n", (double)AltitudeBarometer1, (double)AltitudeBarometer);
+        k_msleep(BARO_LOOP_MS);
     }
 }
