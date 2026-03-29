@@ -61,11 +61,11 @@ void trigger_handler(const struct device *dev, const struct sensor_trigger *trig
 
     rollc = (rolla * cnfdne_wght_rol + (1.0f - cnfdne_wght_rol) * (rollc + (-(raw_g[1] - gy_cal))* dt));
     pitchc = (pitcha * cnfdne_wght_pitch + (1.0f - cnfdne_wght_pitch) * (pitchc + (raw_g[0] - gx_cal)* dt));
-    printk("rolla:%f, pitcha:%f, rollc:%f, pitchc:%f\n",
-        (double)(rolla),
-        (double)(pitcha),
-        (double)(rollc),
-        (double)(pitchc));
+    // printk("rolla:%f, pitcha:%f, rollc:%f, pitchc:%f\n",
+    //     (double)(rolla),
+    //     (double)(pitcha),
+    //     (double)(rollc),
+    //     (double)(pitchc));
 
 }   
 
@@ -75,6 +75,7 @@ int main(void) {
     struct sensor_value a_tmp[3], g_tmp[3];
     float a_sum[3] = {0.0f, 0.0f, 0.0f}, g_sum[3] = {0.0f, 0.0f, 0.0f};
     float a_baro = 0.0f;
+    float a_baro1 = 0.0f;
     int s = 200;
     struct sensor_value pressure, temperature;
     float AltitudeBarometer;
@@ -123,11 +124,11 @@ int main(void) {
         k_msleep(3);
     }
     
-    for (int i = 0; i < s; i++) {
+    for (int i = 0; i < 5; i++) {
         sensor_sample_fetch(dev_baro);
         sensor_channel_get(dev_baro, SENSOR_CHAN_PRESS, &pressure);
         a_baro += (float)sensor_value_to_double(&pressure);
-        k_msleep(15);
+        k_msleep(10);
     }
 
     float ax = (a_sum[0] / s) - b_accel[0], ay = (a_sum[1] / s) - b_accel[1], az = (a_sum[2] / s) - b_accel[2];
@@ -136,8 +137,16 @@ int main(void) {
     level_offsets[1] = A_inv[1][0] * ax + A_inv[1][1] * ay + A_inv[1][2] * az;
     struct sensor_trigger trig = {.type = SENSOR_TRIG_DATA_READY, .chan = SENSOR_CHAN_ALL};
     sensor_trigger_set(dev, &trig, trigger_handler);
-    a_baro = a_baro/s;
+    a_baro = a_baro/5.0f;
 
 
-    while (1) k_sleep(K_FOREVER);
+    while (1) {
+        sensor_sample_fetch(dev_baro);
+        sensor_channel_get(dev_baro, SENSOR_CHAN_PRESS, &pressure);
+        sensor_channel_get(dev_baro, SENSOR_CHAN_AMBIENT_TEMP, &temperature);
+        a_baro1 = (float)sensor_value_to_double(&pressure);
+        AltitudeBarometer = 44330.0f * (1.0f - powf(a_baro1 / a_baro, 0.1903f));
+        printk("alt:%f\n", (double)AltitudeBarometer);
+        k_msleep(100);
+    }
 }
