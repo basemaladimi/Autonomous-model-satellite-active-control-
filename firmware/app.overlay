@@ -12,14 +12,10 @@
     };
 };
 
-&spi3 {
-    status = "okay";
-    pinctrl-0 = <&spim3_default>;
-    pinctrl-names = "default";
 
-    nano_spi: arduino_nano@0 {
-        compatible = "vnd,spi-device";
-        reg = <0>;
-        spi-max-frequency = <50000>;
-    };
+&uart2 {
+    status = "okay";
+    current-speed = <115200>;
+    pinctrl-0 = <&uart2_default>;
+    pinctrl-names = "default";
 };

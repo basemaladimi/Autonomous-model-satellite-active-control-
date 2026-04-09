@@ -14,6 +14,13 @@
 		};
 	};
 
+	uart1_default: uart1_default {
+		group1 {
+			pinmux = <UART1_TX_GPIO17>;
+			output-high;
+		};
+	};
+
 	spi2_custom_pins: spi2_custom_pins {
         group1 {
 			pinmux = <SPIM2_MISO_GPIO11>,

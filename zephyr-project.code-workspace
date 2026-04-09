@@ -1,0 +1,37 @@
+{
+	"folders": [
+		{
+			"path": ".",
+			"name": "workspace"
+		},
+		{
+			"path": "zephyr",
+			"name": "zephyr"
+		},
+		{
+			"path": "firmware",
+			"name": "firmware"
+		}
+	],
+	"settings": {
+		"C_Cpp.default.compilerPath": "/opt/toolchains/zephyr-sdk-0.16.8/xtensa-espressif_esp32_zephyr-elf/bin/xtensa-espressif_esp32_zephyr-elf-gcc",
+		"C_Cpp.default.includePath": [
+			"/workspace/firmware/include",
+			"/workspace/zephyr/include",
+			"/opt/toolchains/zephyr-sdk-0.16.8/xtensa-espressif_esp32_zephyr-elf/xtensa-espressif_esp32_zephyr-elf/include"
+		],
+		"C_Cpp.default.defines": [
+			"__ZEPHYR__=1",
+			"BOARD_ESP32_DEVKITC_WROOM"
+		],
+		"[c]": {
+			"editor.defaultFormatter": "ms-vscode.cpptools",
+			"editor.formatOnSave": true
+		},
+		"files.exclude": {
+			"build": true,
+			".git": true,
+			"**/__pycache__": true
+		}
+	}
+}
